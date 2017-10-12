@@ -1,3 +1,7 @@
 WindowsFormsApp1/bin/
 WindowsFormsApp1/obj/
 packages/
+QLearningMinesAndGold.GUI/bin/
+QLearningMinesAndGoldNN/bin/
+QLearningMinesAndGoldNN/obj/
+QLearningMinesAndGold.GUI/obj/

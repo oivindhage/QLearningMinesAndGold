@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using WindowsFormsApp1.Model;
@@ -17,13 +13,11 @@ namespace WindowsFormsApp1
         Graphics g;
         int stepCount = 400;
         int episodeCount = 0;
-        int currentEpisodeReward = 0;
-        int maxEpisodeReward = 0;
+        double currentEpisodeReward = -1000;
+        double maxEpisodeReward =-1000;
         bool updateUi = true;
         bool fullSpeed = false;
         float epsilon = 0;
-
-        Dictionary<ulong, int[]> QTable = new Dictionary<ulong, int[]>();
 
         public Form1()
         {
@@ -49,12 +43,11 @@ namespace WindowsFormsApp1
         {
             if (currentEpisodeReward > maxEpisodeReward)
                 maxEpisodeReward = currentEpisodeReward;
-
             currentEpisodeReward = 0;
             theBoard.Reset();
             if (updateUi)
             {
-                lblMaxEpisodeReward.Text = $"{maxEpisodeReward}";
+                lblMaxEpisodeReward.Text = $"{(int)maxEpisodeReward}";
                 DrawMap();
             }
         }
@@ -73,20 +66,21 @@ namespace WindowsFormsApp1
                     lblEpisodeCount.Text = $"{episodeCount}";
             }
             stepCount++;
-            ulong state = theBoard.GetState();
-            int[] stateActions = GetOrAddStateActions(state);
+            double[] state = theBoard.GetState(theBoard.AIx, theBoard.AIy);
             if (updateUi)
                 DrawNeutral();
+            //update location based on state and nn
+            //get reward for new state from nn
+            //train nn with old state and reward
 
-            int direction = theBoard.UpdateLocation(stateActions, epsilon);
-            var newState = theBoard.GetState();
-
-            var newStateActions = GetOrAddStateActions(newState);
-            currentEpisodeReward += theBoard.CurrentBlockReward();
-            QTable[state][direction] = theBoard.GetReward(newStateActions, QTable[state][direction]);
+            double[] directionRewards = theBoard.GetDirectionRewards(state);
+            int direction = theBoard.UpdateLocation(directionRewards, epsilon);
+            currentEpisodeReward += theBoard.GetReward();
+            var newState = theBoard.GetState(theBoard.AIx, theBoard.AIy);
+            theBoard.Learn(theBoard.AIx, theBoard.AIy, state, newState, direction, directionRewards);
             if (updateUi)
             {
-                lblCurrentEpisodeReward.Text = $"{currentEpisodeReward}";
+                lblCurrentEpisodeReward.Text = $"{(int)currentEpisodeReward}";
                 DrawAI();
                 lblStepCount.Text = $"{stepCount}";
             }
@@ -99,48 +93,20 @@ namespace WindowsFormsApp1
         private void DrawAI()
             => g.DrawImage(AI, theBoard.AIx * 30, theBoard.AIy * 30);
 
-        private int[] GetOrAddStateActions(ulong state)
-        {
-            if (!QTable.Keys.Contains(state))
-            {
-                QTable.Add(state, new int[] { -100, -100, -100, -100 });
-                if (updateUi)
-                    lblQValues.Text = $"{QTable.Count}";
-            }
-            return QTable[state];
-        }
-
         private void btnStartStop_Click(object sender, EventArgs e)
-            => timer1.Enabled = !timer1.Enabled;
+        {
+            timer1.Enabled = !timer1.Enabled;
+            button1.Enabled = !button1.Enabled;
+        }
 
         private void timer1_Tick(object sender, EventArgs e)
             => Step();
 
         private void btnSave_Click(object sender, EventArgs e)
-        {
-            StringBuilder sb = new StringBuilder();
-            foreach (var key in QTable.Keys)
-            {
-                var val = QTable[key];
-                sb.AppendLine($"{key},{val[0]},{val[1]},{val[2]},{val[3]}");
-            }
-            File.WriteAllText(textBox1.Text, sb.ToString());
-        }
+            => theBoard.Save(textBox1.Text);
 
         private void btnLoad_Click(object sender, EventArgs e)
-        {
-            QTable = new Dictionary<ulong, int[]>();
-            foreach (var line in File.ReadAllLines(textBox1.Text))
-            {
-                string[] values = line.Split(',');
-                var key = ulong.Parse(values[0]);
-                var vals = new int[4];
-                for (int i = 0; i < 4; ++i)
-                    vals[i] = int.Parse(values[i + 1]);
-                QTable.Add(key, vals);
-            }
-            lblQValues.Text = $"{QTable.Count}";
-        }
+            => theBoard.Load(textBox1.Text);
 
         private void trackBar1_ValueChanged(object sender, EventArgs e)
             => timer1.Interval = trackBar1.Value;
